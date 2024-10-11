@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description:
+  CloudWatch - API Gateway - LambdaExecutionRole - Lambda - S3 - Batch
+
+Parameters:
+  CreateNewS3Bucket:
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+    Description: Determine whether to create a new S3 bucket.
+
+  S3BucketName:
+    Type: String
+    Description:
+      If not creating a new S3 bucket, provide the existing bucket name
+    Default: test-bucket
+
+Conditions:
+  CreateNewBucket: !Equals [!Ref CreateNewS3Bucket, 'true']
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 3
+    MemorySize: 128
+
+    Tracing: Active
+    LoggingConfig:
+      LogFormat: JSON
+  Api:
+    TracingEnabled: true
+
+Resources:
+  # S3 Bucket
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateNewBucket
+    Properties:
+      BucketName: !Ref S3BucketName
+
+  # Policy for S3 Bucket
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !If
+        - CreateNewBucket
+        - !Ref S3Bucket
+        - !Ref S3BucketName
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::050451366189:root # Actual AWS Account ID
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:PutObjectAcl
+              - s3:GetObjectAcl
+            Resource: !If
+              - CreateNewBucket
+              - !Sub 'arn:aws:s3:::${S3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${S3BucketName}/*'
+
+  # Define Lambda IAM Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaExecutionRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole # Crucial policy when the Lambda function needs to access resources in a VPC such as RDS instances.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - s3:amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaS3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:PutObjectAcl
+                  - s3:GetObjectAcl
+                Resource: !If
+                  - CreateNewBucket
+                  - !Ref S3Bucket
+                  - !Sub 'arn:aws:s3:::${S3BucketName}/*'
+        # Useful for monitoring Lambda executions from the CloudWatch
+        - PolicyName: LambdaLoggingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+
+  TestLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaExecutionRole.Arn
+      CodeUri: src/test_lambda/
+      Handler: app.lambda_handler
+      Runtime: python3.12
