@@ -1,26 +1,34 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: API Gateway - LambdaExecutionRole - Lambda
+Description: |
+  Services: Lambda, S3, IAM Role, API Gateway, CloudWatch
+
+  Completed:
+  1. Create a policy configuring CloudWatch permissions to log for the Lambda function.
+  2. Create a policy granting S3 bucket access to the Lambda function.
+  3. Create an execution role for the Lambda function assuming aforementioned polices.
+  4. Integrate a Lambda function with API Gateway.
+
+  Remaining Task:
+  1. Create an event for the lambda function to be invoked automatically when the associated source code in the S3 bucket is modified or uploaded.
 
 Parameters:
-  CreateNewS3Bucket:
+  MyAccountId:
+    Description: My AWS account id
     Type: String
-    AllowedValues:
-      - 'true'
-      - 'false'
-    Default: 'true'
-    Description: Determine whether to create a new S3 bucket.
-
-  S3BucketName:
-    Type: String
+    Default: '050451366189'
+  MyLambdaCodeS3BucketName:
     Description:
-      If not creating a new S3 bucket, provide the existing bucket name
-    Default: test-bucket
+      The name of S3 bucket which contains all my lambda code zip files.
+    Type: String
+    Default: flame-lambda-code-bucket
+  MyLambdaCodeS3key:
+    Type: String
+    Default: flame-lambda-function-code.zip
+  MyLambdaFunctionName:
+    Type: String
+    Default: FlameLambdaFunction
 
-Conditions:
-  CreateNewBucket: !Equals [!Ref CreateNewS3Bucket, 'true']
-
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
     Timeout: 3
@@ -33,13 +41,47 @@ Globals:
     TracingEnabled: true
 
 Resources:
+  ########## POLICY ##########
+  # Policy for logging Lambda execution with API Gateway
+  CloudWatchLambdaLoggingPolicy:
+    # Type: AWS::IAM::Policy # Inline policies are not reusable and used for specific permissions
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: CloudWatchLambdaLoggingPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              # - arn:aws:logs:<REGION>:<ACCOUNT>:log-group:<LOG_GROUP_NAME>/*
+              - !Sub 'arn:aws:logs:${AWS::Region}:${MyAccountId}:log-group:*'
+
+  # Policy for accessing S3
+  LambdaS3AccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: LambdaS3AccessPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              - !Sub 'arn:aws:s3:::${MyLambdaCodeS3BucketName}/*'
+
+  ######### Lambda #########
   # Define Lambda IAM Role
-  LambdaExecutionRole:
+  MyLambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: LambdaExecutionRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole # Crucial policy when the Lambda function needs to access resources in a VPC such as RDS instances.
+      # Assumes an execution role when the user invoke lambda functions
+      # Lambda function can access other AWS resources only if an execution role is defined and attached to the lambda function.
+      # If a Lambda function doesn't need to interact with any other AWS resources, an execution role is not necessary.
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -47,13 +89,31 @@ Resources:
             Principal:
               Service:
                 - lambda.amazonaws.com
-                - s3:amazonaws.com
             Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref CloudWatchLambdaLoggingPolicy
+        - !Ref LambdaS3AccessPolicy
+        # - arn:aws:iam::aws:policy/AWSLambdaExecute # Provides Put, Get access to S3 and full access to CloudWatch Logs.
 
-  TestLambdaFunction:
-    Type: AWS::Serverless::Function
+  MyLambdaFunction:
+    # Type: AWS::Lambda::Function # For cloudFormation
+    Type: AWS::Serverless::Function # For SAM
     Properties:
-      Role: !GetAtt LambdaExecutionRole.Arn
-      CodeUri: src/test_lambda/
-      Handler: app.lambda_handler
+      Role: !GetAtt MyLambdaExecutionRole.Arn
+      FunctionName: !Ref MyLambdaFunctionName
       Runtime: python3.12
+      Handler: app.lambda_handler
+      CodeUri:
+        Bucket: !Ref MyLambdaCodeS3BucketName
+        Key: !Ref MyLambdaCodeS3key
+      Events:
+        RunCode:
+          Type: Api
+          Properties:
+            Path: /run
+            Method: get
+
+Outputs:
+  MyLambdaFunctionArn:
+    Description: ARN of the MyLambdaFunction
+    Value: !GetAtt MyLambdaFunction.Arn
