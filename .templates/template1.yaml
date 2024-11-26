@@ -1,33 +1,26 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: |
-  Services: Lambda, S3, IAM Role, API Gateway, CloudWatch
+Description:
+  Services - Lambda, S3, IAM Role, API Gateway, CloudWatch
 
-  Completed:
-  1. Create a policy configuring CloudWatch permissions to log for the Lambda function.
-  2. Create a policy granting S3 bucket access to the Lambda function.
-  3. Create an execution role for the Lambda function assuming aforementioned polices.
-  4. Integrate a Lambda function with API Gateway.
+  # Done:
+  # 1. Create a policy configuring CloudWatch permissions to log for the Lambda function.
+  # 2. Create a policy granting S3 bucket access to the Lambda function.
+  # 3. Create an execution role for the Lambda function assuming aforementioned polices.
+  # 4. Integrate a Lambda function with API Gateway.
 
-  Remaining Task:
-  1. Create an event for the lambda function to be invoked automatically when the associated source code in the S3 bucket is modified or uploaded.
+  # To do:
+  # 1. Create an event for the lambda function to be invoked automatically when the associated source code in the S3 bucket is modified or uploaded.
 
 Parameters:
-  MyAccountId:
-    Description: My AWS account id
-    Type: String
-    Default: '050451366189'
   MyLambdaCodeS3BucketName:
     Description:
       The name of S3 bucket which contains all my lambda code zip files.
     Type: String
-    Default: flame-lambda-code-bucket
   MyLambdaCodeS3key:
     Type: String
-    Default: flame-lambda-function-code.zip
   MyLambdaFunctionName:
     Type: String
-    Default: FlameLambdaFunction
 
 Globals:
   Function:
@@ -41,7 +34,6 @@ Globals:
     TracingEnabled: true
 
 Resources:
-  ########## POLICY ##########
   # Policy for logging Lambda execution with API Gateway
   CloudWatchLambdaLoggingPolicy:
     # Type: AWS::IAM::Policy # Inline policies are not reusable and used for specific permissions
@@ -58,9 +50,9 @@ Resources:
               - logs:PutLogEvents
             Resource:
               # - arn:aws:logs:<REGION>:<ACCOUNT>:log-group:<LOG_GROUP_NAME>/*
-              - !Sub 'arn:aws:logs:${AWS::Region}:${MyAccountId}:log-group:*'
+              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/lambda/*'
 
-  # Policy for accessing S3
+  # Policy for Lambda to access the target S3 resource
   LambdaS3AccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -74,7 +66,6 @@ Resources:
             Resource:
               - !Sub 'arn:aws:s3:::${MyLambdaCodeS3BucketName}/*'
 
-  ######### Lambda #########
   # Define Lambda IAM Role
   MyLambdaExecutionRole:
     Type: AWS::IAM::Role
