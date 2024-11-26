@@ -6,6 +6,7 @@ import botocore
 
 region_name = "ap-northeast-1"
 
+
 def lambda_handler(event, context):
     if not ("httpMethod" in event and event["httpMethod"] == "GET"):
         return {
@@ -33,18 +34,18 @@ def lambda_handler(event, context):
 
         return json.dumps({
             "statusCode": 200,
-            "body":{
+            "body": {
                 "msg": "Successfully executed.",
             },
         })
-    except KeyError as e:
+    except KeyError:
         return json.dumps({
             "statusCode": 500,
-            "body":{
-                "msg":"The bucket name or object key is not found.",
+            "body": {
+                "msg": "The bucket name or object key is not found.",
             }
         })
-    except botocore.exception.ClientError as e:
+    except botocore.exceptions.ClientError as e:
         if e.response["Error"]["Code"] == "ResourceNotFoundException":
             return json.dumps({
                 "statusCode": 400,
@@ -67,6 +68,7 @@ def lambda_handler(event, context):
                 "exception": str(e),
             }
         })
+
 
 def zip_to_pascal_name(filename: str) -> str:
     name, _ = os.path.splitext(filename)
