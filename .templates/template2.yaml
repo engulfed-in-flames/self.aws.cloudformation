@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description:
+  Services - Lambda, S3, IAM Role, API Gateway, CloudWatch, EventBridge
+
+  # Done:
+  # + Done tasks from `template1.yaml`
+  # 1. Create an event for the lambda function to be invoked automatically
+  #    when the associated source code in the S3 bucket is modified.
+
+  # To do:
+  # 1. Integrate existing S3 bucket. (It seems impossible)
+
+Parameters:
+  MyLambdaCodeS3BucketName:
+    Description:
+      The name of S3 bucket which contains all my lambda code zip files.
+    Type: String
+  MyLambdaCodeS3Key:
+    Type: String
+  MyLambdaFunctionName:
+    Type: String
+
+Globals:
+  Function:
+    Timeout: 3
+    MemorySize: 128
+
+    Tracing: Active
+    LoggingConfig:
+      LogFormat: JSON
+  Api:
+    TracingEnabled: true
+
+Resources:
+  CloudWatchLambdaLoggingPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allowing CloudWatch to log Lambda execution history
+      ManagedPolicyName: CloudWatchLambdaLoggingPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/lambda/*'
+
+  LambdaS3AccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allowing Lambda to access the S3 objects.
+      ManagedPolicyName: LambdaS3AccessPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              - !Sub 'arn:aws:s3:::${MyLambdaCodeS3BucketName}/*'
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !GetAtt CloudWatchLambdaLoggingPolicy.Arn
+        - !GetAtt LambdaS3AccessPolicy.Arn
+
+  MyLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaExecutionRole.Arn
+      FunctionName: !Ref MyLambdaFunctionName
+      Runtime: python3.12
+      Handler: app.lambda_handler
+      CodeUri:
+        Bucket: !Ref MyLambdaCodeS3BucketName
+        Key: !Ref MyLambdaCodeS3Key
+      Events:
+        RunCode:
+          Type: Api
+          Properties:
+            Path: /run
+            Method: get

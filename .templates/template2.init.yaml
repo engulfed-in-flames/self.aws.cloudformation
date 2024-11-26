@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description:
+  Create a Lambda function 'UpdateLambdaFunction'. When any `.zip` file is
+  created in the S3 bucket `LambdaCodeS3BucketName`, The Lambda function then
+  verifies the existence of the target Lambda function and, if necessary,
+  updates its code using the newly created `.zip` file.
+
+  # Required:
+  # 1. The aforementioned S3 bucket should be created in advance.
+  # 2. The aforementioned S3 bucket should have source code(.zip) to
+  #    create `UpdateLambdaFunction`.
+  # 3. The S3 bucket's EventBridge notification should be enabled.
+
+  # Note:
+  # This template doesn't contain the code necessary to create the aforementioned S3 bucket.
+  # This is due to a limitation in CFN where there is no built-in mechanism
+  # to verify the existence of an S3 bucket prior to creation,
+  # leading to inevitable stack failures upon subsequent deployments."
+
+Parameters:
+  MyLambdaCodeS3BucketName:
+    Description: The name of S3 bucket which contains all lambda code zip files.
+    Type: String
+  UpdateLambdaFunctionS3Key:
+    Type: String
+  UpdateLambdaFunctionName:
+    Type: String
+
+Globals:
+  Function:
+    Timeout: 3
+    MemorySize: 128
+    Tracing: Active
+    LoggingConfig:
+      LogFormat: JSON
+  Api:
+    TracingEnabled: true
+
+Resources:
+  UpdateLambdaPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description:
+        Allowing to update lambda functions when the associated source code in
+        the S3 bucket is modified.
+      ManagedPolicyName: UpdateLambdaPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/lambda/*'
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              - !Sub 'arn:aws:s3:::${MyLambdaCodeS3BucketName}/*'
+          - Effect: Allow
+            Action:
+              - lambda:UpdateFunctionCode
+            Resource:
+              - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*'
+
+  UpdateLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # For managed polices, you should reference the ARN using `!Ref` instead of `!GetAtt`
+        - !Ref UpdateLambdaPolicy
+
+  UpdateLambdaEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - 'Object Created'
+        detail:
+          bucket:
+            name:
+              - !Ref MyLambdaCodeS3BucketName
+          object:
+            key:
+              suffix:
+                - '.zip'
+      Targets:
+        - Arn: !GetAtt UpdateLambdaFunction.Arn
+          Id: !Ref UpdateLambdaFunctionName
+
+  # Permission for EventBridge to invoke the UpdateLambdaFunction
+  InvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UpdateLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt UpdateLambdaEventRule.Arn
+
+  UpdateLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt UpdateLambdaExecutionRole.Arn
+      FunctionName: !Ref UpdateLambdaFunctionName
+      Runtime: python3.12
+      Handler: app.lambda_handler
+      CodeUri:
+        Bucket: !Ref MyLambdaCodeS3BucketName
+        Key: !Ref UpdateLambdaFunctionS3Key
