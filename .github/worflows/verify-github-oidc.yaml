@@ -1,0 +1,31 @@
+name: Verify OIDC in AWS
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**/*.py'
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Print changed files
+        run: |
+          echo "List of changed files:" 
+          echo $(git diff --name-only HEAD^ HEAD)
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume:
+            arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ap-northeast-1
+      - name: Fetch The Caller Identity
+        run: |
+          aws sts get-caller-identity
