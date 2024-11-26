@@ -20,10 +20,6 @@
 - AWS Account (IAM Identity Center の SSO による認証方法を推奨)
 - AWS CLI
 
-## 理解図
-
-![image](理解図.png)
-
 ## 参考記事
 
 - [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html)
@@ -50,7 +46,7 @@
    が`deploy.template99.sh`の場合、（Linux）ターミナル
    に`./deploy.template99.sh`を入力する。
 
-## ローカルでビルド及びテスト（⚠️ これ以降の内容は全面改修予定 ⚠️）
+## ローカルでビルド及びテスト
 
 ### ローカルでビルド
 
@@ -116,8 +112,8 @@ Events:
 ## ラムダ関数ログの取得、追従、フィルタリング
 
 デバッグをより簡単にするために、SAM CLI では`sam logs`を使用します。このコマンド
-は、ログを端末に表示するだけでなく、バグを素早く見つけるのに役立つ便利な機能がい
-くつか備わっています。
+は、ログを端末に表示するだけでなく、バグを素早く見つけるに役立つ便利な機能がいく
+つか備わっています。
 
 `NOTE`: このコマンドは、SAM を使用してデプロイしたものだけでなく、すべての AWS
 ラムダ関数で動作します。
