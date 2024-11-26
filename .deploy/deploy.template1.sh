@@ -2,12 +2,12 @@
 
 set -e
 
-PROFILE="gyeongsu-gim"
+PROFILE="YOUR_AWS_PROFILE"
 TEMPLATE="template.yaml"
 PACKAGED_TEMPLATE="packaged-template.yaml"
-REGION="ap-northeast-1"
-S3_BUCKET="flame-lambda-code-bucket"
-STACK_NAME="flame-stack"
+REGION="YOUR_AWS_REGION"
+S3_BUCKET="YOUR_AWS_S3_BUCKET"
+STACK_NAME="YOUR_AWS_STACK_NAME"
 
 # 1. Create a S3 bucket if it doesn't exists.
 if aws s3 ls --profile $PROFILE "s3://$S3_BUCKET" 2>&1 | grep -q 'NoSuchBucket'
@@ -55,5 +55,5 @@ aws cloudformation describe-stacks --profile $PROFILE --stack-name $STACK_NAME
 #
 # echo "Deleting CloudFormation stack..."
 # aws cloudformation delete-stack \
-#   --profile gyeongsu-gim \
+#   --profile $PROFILE \
 #   --stack-name $STACK_NAME
